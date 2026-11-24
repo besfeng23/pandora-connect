@@ -20,6 +20,23 @@ export function createHandler({env=process.env,request=fetch}={}){
     const data=await r.json();if(!data.access_token||data.user?.is_anonymous)return reply(401,{error:'Authorized account required'});
     return reply(200,{accessToken:data.access_token});
    }
+   if(b.action==='loyalty'){
+    const bearer=req.headers.authorization;
+    if(typeof bearer!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(bearer))return reply(401,{error:'Sign in required'});
+    const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+    if(!uuid(b.tenant)||!['list','guest_list','create','publish','close','claim','redeem'].includes(b.operation))return reply(400,{error:'Invalid rewards request'});
+    const params={p_tenant:b.tenant,p_action:b.operation};
+    if(!['list','guest_list'].includes(b.operation)){if(!uuid(b.id))return reply(400,{error:'Valid offer or claim code required'});params.p_id=b.id;}
+    if(b.operation==='create'){
+      if(typeof b.title!=='string'||!b.title.trim()||b.title.trim().length>80||typeof b.terms!=='string'||!b.terms.trim()||b.terms.trim().length>400||!Number.isInteger(b.minVisits)||b.minVisits<1||b.minVisits>30)return reply(400,{error:'Enter a name, terms and 1–30 required visits'});
+      Object.assign(params,{p_title:b.title.trim(),p_terms:b.terms.trim(),p_min:b.minVisits});
+    }
+    if(['publish','close','redeem'].includes(b.operation)){if(b.confirm!==true)return reply(400,{error:'Explicit confirmation required'});params.p_confirm=true;}
+    const r=await request(url+'/rest/v1/rpc/pandora_connect_loyalty',{method:'POST',headers:{...headers,Authorization:bearer},body:JSON.stringify(params),signal:AbortSignal.timeout(12000)});
+    if(!r.ok)return reply(r.status===401?401:r.status===403?403:r.status===400||r.status===409?400:503,{error:r.status===401?'Session expired':r.status===403?'Not authorized or reward no longer eligible':r.status===400||r.status===409?'Offer or claim unavailable':'Rewards service unavailable'});
+    const data=await r.json();if(b.operation==='redeem'){if(data.redeemed!==true||typeof data.title!=='string')return reply(502,{error:'Unexpected response'});return reply(200,{redeemed:true,title:data.title});}
+    if(!Array.isArray(data.offers))return reply(502,{error:'Unexpected response'});return reply(200,{offers:data.offers});
+   }
    if(b.action==='insights'){
     const bearer=req.headers.authorization;
     if(typeof bearer!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(bearer))return reply(401,{error:'Sign in required'});
