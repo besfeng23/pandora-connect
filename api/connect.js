@@ -1,3 +1,4 @@
+import {planInsights,coarseMetrics,geminiConfigured,generateAggregatePlan} from '../insights.mjs';
 const PROJECT='https://xyefkykwuppbweabvvmk.supabase.co';
 export function createHandler({env=process.env,request=fetch}={}){
  return async function handler(req,res){
@@ -18,6 +19,19 @@ export function createHandler({env=process.env,request=fetch}={}){
     if(!r.ok)return reply(r.status===429?429:401,{error:r.status===429?'Try again later':'Unable to sign in'});
     const data=await r.json();if(!data.access_token||data.user?.is_anonymous)return reply(401,{error:'Authorized account required'});
     return reply(200,{accessToken:data.access_token});
+   }
+   if(b.action==='insights'){
+    const bearer=req.headers.authorization;
+    if(typeof bearer!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(bearer))return reply(401,{error:'Sign in required'});
+    if(typeof b.tenantId!=='string'||!/^[0-9a-f-]{36}$/i.test(b.tenantId)||!['rules','gemini'].includes(b.mode))return reply(400,{error:'Invalid analysis request'});
+    const r=await request(url+'/rest/v1/rpc/pandora_connect_overview',{method:'POST',headers:{...headers,Authorization:bearer},body:'{}',signal:AbortSignal.timeout(12000)});
+    if(!r.ok)return reply(r.status===401||r.status===403?401:503,{error:'Workspace unavailable'});
+    const rows=await r.json(),tenant=Array.isArray(rows)?rows.find(t=>t.id===b.tenantId):null;
+    if(!tenant)return reply(403,{error:'Workspace permission required'});
+    const rules=planInsights(tenant),eligible=tenant.role==='owner'&&Boolean(coarseMetrics(tenant))&&geminiConfigured(env);
+    if(b.mode==='rules')return reply(200,{rules,geminiAvailable:eligible});
+    if(!eligible||b.allowAggregateAnalysis!==true)return reply(403,{error:'Owner approval, provider configuration and sufficient data required'});
+    try{const analysis=await generateAggregatePlan({tenant,env,request});return reply(200,{rules,analysis,source:'gemini'});}catch{return reply(503,{error:'AI provider unavailable; local recommendations remain available'});}
    }
    const commissionActions=['status','site_create','guest_invite','guest_disable','gateway_bind','gateway_revoke','writer_bind','writer_revoke'];
    if(b.action==='commission'){
