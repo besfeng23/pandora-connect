@@ -19,6 +19,29 @@ export function createHandler({env=process.env,request=fetch}={}){
     const data=await r.json();if(!data.access_token||data.user?.is_anonymous)return reply(401,{error:'Authorized account required'});
     return reply(200,{accessToken:data.access_token});
    }
+   const commissionActions=['status','site_create','guest_invite','guest_disable','gateway_bind','gateway_revoke','writer_bind','writer_revoke'];
+   if(b.action==='commission'){
+    const bearer=req.headers.authorization;
+    if(typeof bearer!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(bearer))return reply(401,{error:'Sign in required'});
+    const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+    if(!commissionActions.includes(b.operation)||!uuid(b.tenantId))return reply(400,{error:'Invalid setup action'});
+    const data={tenantId:b.tenantId};
+    if(b.operation==='site_create'){
+      if(!uuid(b.siteId)||typeof b.name!=='string'||b.name.trim().length<1||b.name.trim().length>80)return reply(400,{error:'Valid location required'});
+      Object.assign(data,{siteId:b.siteId,name:b.name.trim()});
+    }else if(b.operation!=='status'){
+      if(!uuid(b.userId))return reply(400,{error:'Verified account ID required'});data.userId=b.userId;
+      if(b.operation==='guest_invite'){if(b.adultVerified!==true)return reply(400,{error:'Independent adult verification required'});data.adultVerified=true;}
+      if(b.operation.startsWith('gateway_')||b.operation.startsWith('writer_')){
+        if(!uuid(b.siteId))return reply(400,{error:'Select a location'});data.siteId=b.siteId;
+        if(b.operation.endsWith('_bind')){if(b.dedicatedAccount!==true)return reply(400,{error:'Dedicated account required'});data.dedicatedAccount=true;}
+      }
+    }
+    const r=await request(url+'/rest/v1/rpc/pandora_connect_commission',{method:'POST',headers:{...headers,Authorization:bearer},body:JSON.stringify({p_action:b.operation,p_data:data}),signal:AbortSignal.timeout(12000)});
+    if(!r.ok)return reply(r.status===401?401:r.status===403?403:r.status===400||r.status===409?400:503,{error:r.status===401?'Session expired':r.status===403?'Owner permission or verified account required':r.status===400||r.status===409?'Setup request rejected':'Setup unavailable'});
+    const result=await r.json();if(!result||typeof result!=='object'||Array.isArray(result))return reply(502,{error:'Unexpected response'});
+    return reply(200,result);
+   }
    const guestAction=['guest_options','guest_save'].includes(b.action);
    const campaignAction=['campaign_list','campaign_create','campaign_archive'].includes(b.action);
    if(guestAction||campaignAction){
