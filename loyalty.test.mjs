@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createHandler} from './api/connect.js';
+const env={NEXT_PUBLIC_SUPABASE_URL:'https://xyefkykwuppbweabvvmk.supabase.co',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test'};
+const tenant='10000000-0000-4000-8000-000000000011',id='50000000-0000-4000-8000-000000000011';
+async function call(data,request=async()=>{throw Error('unexpected network')},auth=true){const out={};await createHandler({env,request})({method:'POST',headers:{'content-type':'application/json',...(auth?{authorization:'Bearer '+'a'.repeat(40)}:{})},body:{action:'loyalty',tenant,...data}},{setHeader(){},status(n){out.status=n;return this},json(x){out.body=x;return this}});return out;}
+test('reward access requires bearer',async()=>assert.equal((await call({operation:'list'},undefined,false)).status,401));
+test('publish and redeem require explicit approval',async()=>{for(const operation of ['publish','redeem','close'])assert.equal((await call({operation,id})).status,400)});
+test('reject invalid visit threshold',async()=>assert.equal((await call({operation:'create',id,title:'Test',terms:'Terms',minVisits:0})).status,400));
+test('forwards allowlisted draft attributes only',async()=>{const r=await call({operation:'create',id,title:' Test ',terms:' Terms ',minVisits:3,role:'owner',state:'published'},async(url,o)=>{assert.equal(url,env.NEXT_PUBLIC_SUPABASE_URL+'/rest/v1/rpc/pandora_connect_loyalty');assert.deepEqual(JSON.parse(o.body),{p_tenant:tenant,p_action:'create',p_id:id,p_title:'Test',p_terms:'Terms',p_min:3});return Response.json({offers:[]});});assert.deepEqual(r.body,{offers:[]})});
+test('claim cannot override customer or visits',async()=>{const r=await call({operation:'claim',id,customerId:id,minVisits:1},async(url,o)=>{assert.deepEqual(JSON.parse(o.body),{p_tenant:tenant,p_action:'claim',p_id:id});return Response.json({offers:[]});});assert.equal(r.status,200);});
+test('permission denial preserved',async()=>assert.equal((await call({operation:'claim',id},async()=>new Response('',{status:403}))).status,403));
+test('redemption rejects unexpected response',async()=>assert.equal((await call({operation:'redeem',id,confirm:true},async()=>Response.json({offers:[]}))).status,502));
