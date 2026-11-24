@@ -25,6 +25,7 @@ begin
  end if;
  uid:=(p_data->>'userId')::uuid;
  if uid is null then raise exception 'Account ID required' using errcode='22023';end if;
+ perform pg_advisory_xact_lock(hashtextextended('pandora-connect-account:'||uid::text,0));
  if p_action='guest_disable' then
  select * into g from pandora_connect.guest_access where tenant_id=tid and user_id=uid for update;
  if not found then raise exception 'Invitation unavailable' using errcode='42501';end if;
