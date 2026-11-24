@@ -1,0 +1,6 @@
+// Trusted POS or booking bridge only. This is not a public tracking pixel.
+const {NEXT_PUBLIC_SUPABASE_URL:url,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:key,CONNECT_EVENT_ACCESS_TOKEN:token,CONNECT_TENANT_ID:tenant,CONNECT_SITE_ID:site}=process.env;
+const [customer,event,kind,at]=process.argv.slice(2);
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+if(url!=='https://xyefkykwuppbweabvvmk.supabase.co'||!key?.startsWith('sb_publishable_')||!token||![tenant,site,customer,event].every(v=>uuid.test(v||''))||!['visit','purchase','offer_redeemed'].includes(kind)||!at||!Number.isFinite(Date.parse(at))){console.error('Invalid trusted event configuration');process.exit(2);}
+try{const r=await fetch(url+'/rest/v1/rpc/pandora_connect_record_first_party',{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({p_tenant:tenant,p_site:site,p_customer:customer,p_event:event,p_kind:kind,p_at:new Date(at).toISOString()}),signal:AbortSignal.timeout(12000)});if(!r.ok){console.error('Event rejected: HTTP '+r.status);process.exitCode=1;}else{const j=await r.json();console.log(JSON.stringify({accepted:j.accepted===true,duplicate:j.duplicate===true}));}}catch{console.error('Event transport unavailable');process.exitCode=1;}
