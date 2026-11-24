@@ -74,6 +74,24 @@ export function createHandler({env=process.env,request=fetch}={}){
     const j=await r.json();if(!['blocked','preview_only'].includes(j.status))return reply(502,{error:'Unexpected response'});
     return reply(200,{status:j.status,eligibleCount:j.status==='preview_only'?j.eligibleCount:null,reason:j.reason});
    }
+   if(b.action==='portal_offer'){
+    const bearer=req.headers.authorization;
+    if(typeof bearer!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(bearer))return reply(401,{error:'Sign in required'});
+    const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+    if(!['guest_list','owner_list','publish','stop'].includes(b.operation))return reply(400,{error:'Invalid offer action'});
+    const data={};
+    if(b.operation!=='guest_list'){if(!uuid(b.tenantId))return reply(400,{error:'Valid business required'});data.tenantId=b.tenantId;}
+    if(['publish','stop'].includes(b.operation)){if(!uuid(b.campaignId))return reply(400,{error:'Valid campaign required'});data.campaignId=b.campaignId;}
+    if(b.operation==='publish'){
+      if(b.confirm!==true||typeof b.headline!=='string'||!b.headline.trim()||b.headline.trim().length>100||typeof b.message!=='string'||!b.message.trim()||b.message.trim().length>500||!Number.isInteger(b.days)||b.days<1||b.days>30)return reply(400,{error:'Valid offer and explicit approval required'});
+      Object.assign(data,{confirm:true,headline:b.headline.trim(),message:b.message.trim(),days:b.days});
+    }
+    const r=await request(url+'/rest/v1/rpc/pandora_connect_portal_offer',{method:'POST',headers:{...headers,Authorization:bearer},body:JSON.stringify({p_action:b.operation,p_data:data}),signal:AbortSignal.timeout(12000)});
+    if(!r.ok)return reply(r.status===401?401:r.status===403?403:r.status===400||r.status===409?400:503,{error:'Offer request rejected or unavailable'});
+    const j=await r.json();
+    if(b.operation==='guest_list'||b.operation==='owner_list'){if(!Array.isArray(j))return reply(502,{error:'Unexpected response'});return reply(200,{offers:j});}
+    return reply(200,{published:j.published===true,stopped:j.stopped===true});
+   }
    const guestAction=['guest_options','guest_save'].includes(b.action);
    const campaignAction=['campaign_list','campaign_create','campaign_archive'].includes(b.action);
    if(guestAction||campaignAction){
