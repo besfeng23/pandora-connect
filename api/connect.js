@@ -56,6 +56,14 @@ export function createHandler({env=process.env,request=fetch}={}){
     const result=await r.json();if(!result||typeof result!=='object'||Array.isArray(result))return reply(502,{error:'Unexpected response'});
     return reply(200,result);
    }
+   if(b.action==='guest_erase'){
+    const bearer=req.headers.authorization;
+    if(typeof bearer!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(bearer))return reply(401,{error:'Sign in required'});
+    if(typeof b.tenant!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(b.tenant)||b.confirm!==true)return reply(400,{error:'Explicit confirmation required'});
+    const r=await request(url+'/rest/v1/rpc/pandora_connect_erase_guest',{method:'POST',headers:{...headers,Authorization:bearer},body:JSON.stringify({p_tenant:b.tenant,p_confirm:true}),signal:AbortSignal.timeout(12000)});
+    if(!r.ok)return reply(r.status===401?401:r.status===403?403:503,{error:'Guest erasure unavailable'});
+    const j=await r.json();if(j.erased!==true)return reply(502,{error:'Unexpected response'});return reply(200,{erased:true});
+   }
    const guestAction=['guest_options','guest_save'].includes(b.action);
    const campaignAction=['campaign_list','campaign_create','campaign_archive'].includes(b.action);
    if(guestAction||campaignAction){
