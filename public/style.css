@@ -14,3 +14,6 @@
 .guest #guest-message:not(:empty){padding:12px 15px;border:1px solid var(--border);border-radius:10px;background:#141b20}
 @media(max-width:1020px){.draft-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.draft-form{grid-template-columns:1fr}.draft-form .primary{width:100%}.guest-choice{padding:13px}.draft-list .line{align-items:flex-start}}
+
+/* Commissioning desk */
+.commission-body{margin-top:18px}.commission-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.commission-form{border:1px solid var(--border);background:#0e1319;border-radius:13px;padding:18px;display:grid;align-content:start;gap:12px;min-width:0}.commission-form h3{color:var(--accent);letter-spacing:.01em}.commission-form p{margin:0}.commission-form .primary{justify-content:center;min-height:42px}.account-id{font-size:11px;overflow-wrap:anywhere;color:var(--muted)}.commission-form .line{align-items:start}.commission-form .outline{flex-shrink:0;font-size:12px}@media(max-width:850px){.commission-grid{grid-template-columns:1fr}.commission-form{padding:15px}}
