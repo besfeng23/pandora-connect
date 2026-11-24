@@ -1,0 +1,13 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {Connect} from './index.mjs';
+const now='2026-11-25T00:00:00Z';
+function setup(){const c=new Connect({clock:()=>now});c.register('a',{id:'1',emailVerified:true,adultConfirmed:true});return c;}
+const consent=(c,purpose,granted=true)=>c.consent('a','1',{purpose,granted,noticeVersion:'v1',evidenceId:'receipt-1'});
+const event=(c,id='1')=>c.event('a',{id,customerId:'1',kind:'visit',site:'shop',at:now});
+test('default denies analytics and marketing',()=>{const c=setup();assert.equal(event(c).accepted,false);assert.deepEqual(c.audience('a',{channel:'email',segment:'frequent_visitor'}),[]);});
+test('eligible segment requires separate channel consent',()=>{const c=setup();consent(c,'analytics');for(let i=0;i<3;i++)event(c,String(i));assert.deepEqual(c.segments('a','1'),['frequent_visitor']);assert.deepEqual(c.audience('a',{channel:'email',segment:'frequent_visitor'}),[]);consent(c,'email');assert.deepEqual(c.audience('a',{channel:'email',segment:'frequent_visitor'}),['1']);consent(c,'email',false);assert.deepEqual(c.audience('a',{channel:'email',segment:'frequent_visitor'}),[]);});
+test('tenant isolation and duplicate prevention',()=>{const c=setup();consent(c,'analytics');event(c);assert.equal(event(c).duplicate,true);assert.equal(c.summary('a').events,1);assert.equal(c.summary('b').events,0);assert.throws(()=>c.segments('b','1'));});
+test('analytics withdrawal purges events; re-consent does not restore history',()=>{const c=setup();consent(c,'analytics');event(c);consent(c,'analytics',false);assert.equal(c.summary('a').events,0);consent(c,'analytics');assert.deepEqual(c.segments('a','1'),[]);});
+test('no child or unconfirmed adult marketing',()=>{const c=new Connect({clock:()=>now});c.register('a',{id:'1'});assert.throws(()=>consent(c,'analytics'));});
+test('deletion removes profile and events',()=>{const c=setup();consent(c,'analytics');event(c);c.erase('a','1');assert.equal(c.summary('a').registeredCustomers,0);assert.equal(c.summary('a').events,0);});
+test('expired event rejected and aggregate isolated',()=>{const c=setup();consent(c,'analytics');assert.throws(()=>c.event('a',{id:'old',customerId:'1',kind:'visit',site:'shop',at:'2025-01-01'}));c.networkAggregate('a',{site:'shop',windowStart:now,connections:3,bytes:100});assert.equal(c.summary('a').networkWindows,1);assert.equal(c.summary('b').networkWindows,0);});
+test('channel verification and unknown channel restrictions',()=>{const c=setup();consent(c,'analytics');consent(c,'sms');for(let i=0;i<3;i++)event(c,String(i));assert.deepEqual(c.audience('a',{channel:'sms',segment:'frequent_visitor'}),[]);assert.throws(()=>c.audience('a',{channel:'unknown',segment:'frequent_visitor'}));});
