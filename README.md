@@ -1,15 +1,26 @@
-# Pandora Connect — foundation v0.1.0
+# Pandora Connect
 
-Reusable Node.js domain module for opt-in guest Wi-Fi customer retention. Synthetic demo only; not installed on any network. No dependencies, secrets, advertising SDKs, device fingerprints or packet inspection.
+Reusable customer intelligence module. Workspace v0.2; core package v0.1.0.
 
-Run `npm test` and `npm run demo`. Import `Connect` from `index.mjs` to exercise the reference domain model. Do not expose its methods directly over HTTP. The in-memory adapter is intentionally nonpersistent and is not a security boundary. Server-side authentication, tenant binding, verified registration, evidence validation, durable RLS storage, audit policies and rate limiting are required before use with real people. Inputs asserting age, identity or consent are trusted-server inputs, not browser-supplied facts. Visit IDs must be issued once per authenticated visit by the production adapter, not each page view.
+Production alias: https://pandora-connect.vercel.app. On Nov 25, 2026 PHT, Vercel reported READY for deployment dpl_8KPCj7WkpvCjSG23hnQAwqG72tVF, source commit 0a93f8564512cee8a37a0f732948a6c2e5d632a2; build logs confirm 15/15 tests passed. Independent HTTP/browser checks could not be completed. Real owner login remains unverified.
 
-## Proposed integration
-- Router adapter: managed gateway returns anonymous per-site traffic summaries; network security telemetry stays separate and local, governed by a separate retention/access policy.
-- Captive portal: guest access remains available without marketing consent. Optional verified enrollment and separate analytics/email/SMS/ads/portal choices; no prechecked boxes. Identity never inferred from MAC or private traffic. Marketing requires adult eligibility.
-- Supabase: tenant-scoped customer IDs, channel consent receipts, allowlisted first-party events, separate aggregate network windows; RLS and server-only writes with tenant membership checks. Keep contact addresses in a separately protected vault. Define legally appropriate retention and data rights before rollout. Current demo deletes event history on analytics withdrawal and deletes demo records on erasure; production must handle backups, consent audit evidence and provider suppression.
-- Vercel dashboard: roles, permissioned aggregates, consent/segment review, no raw network data in customer profiles. AI analyzes aggregate cohorts; use rules as baseline, validate any predictive score, avoid sensitive inferences. No automatic transmission to ad providers; recheck eligibility, provider policy and consent immediately before approved sends and handle revocation at providers.
-- Roadmap: visit frequency, loyalty and rewards, booking/POS integration, campaign attribution and holdout tests, capacity analytics, service feedback, business-specific adapters, tenant-bounded offers. No cross-business profile sharing by default.
+Database: project xyefkykwuppbweabvvmk (Memory); isolated pandora_connect schema, eight RLS-enabled tables. Existing public and plp_runtime table counts unchanged. Two namespaced security-invoker RPCs added to public; existing tables and auth configuration not changed. No real tenants, memberships, customers, events, gateways or telemetry created. Rollback tests verified tenant and gateway isolation, duplicate-window replacement, anonymous-session/non-member denial, consent counting and evidence-column restriction.
 
-## Not implemented
-Router integration, durable persistence, authentication, real contact verification, UI, provider integrations, AI inference, legal review and live deployment. Reference tests cover domain behavior only, not security of an integrated system. 90-day event/aggregate retention is a proposed configurable default, not an approved legal retention policy. No real customer data collected.
+## Applied migrations
+Sources under supabase/draft, in applied order; do not reapply on existing project:
+- 20261124192309 pandora_connect_private_foundation: pandora_connect.sql (without explicit transaction wrapper)
+- 20261124192605 pandora_connect_owner_dashboard: owner_dashboard.sql
+- 20261124192804 pandora_connect_gateway_ingest: gateway_ingest.sql
+- 20261124193010 pandora_connect_dashboard_hardening: dashboard_hardening.sql
+
+## Components and limits
+Read-only owner dashboard with existing Supabase email/password sign-in, memory-only access token and tenant memberships. Network, customer, campaign and setup screens. In-memory core with consent and segmentation rules is not yet a persistent customer writer. Local authorized OpenWrt inventory and aggregate-only gateway bridge require physical commissioning; no raw device data is uploaded. Guest portal is informational preview only. No live collection, AI provider, ad exports or campaign sends. No actual credentials committed; public repo.
+
+## Commissioning
+1. Verify intended owner's existing Supabase Auth email or UUID, then assign explicit tenant/site membership; test login.
+2. Confirm first business/site and router make/model/firmware; provision dedicated bound gateway identity and verify measured aggregates, token rotation and physical Wi-Fi access.
+3. Complete verified opt-in guest registration, adult eligibility, privacy notices, retention/deletion and server-only event writes before collection. Network access independent of marketing. Never link MAC addresses or private traffic to marketing identity.
+4. Connect authorized AI/advertising accounts, consent-gated provider exports, revocation and approval flow. No automatic ad spending or cross-business identity sharing.
+5. Verify HTTP/mobile/owner sign-in and monitoring before unrestricted launch.
+
+Run npm test and npm run demo. See gateway/README.md. Pandora Memory connection failed; this record documents verified engineering outcomes, not approved canonical Memory.
