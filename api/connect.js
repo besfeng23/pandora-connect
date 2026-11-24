@@ -19,6 +19,38 @@ export function createHandler({env=process.env,request=fetch}={}){
     const data=await r.json();if(!data.access_token||data.user?.is_anonymous)return reply(401,{error:'Authorized account required'});
     return reply(200,{accessToken:data.access_token});
    }
+   const guestAction=['guest_options','guest_save'].includes(b.action);
+   const campaignAction=['campaign_list','campaign_create','campaign_archive'].includes(b.action);
+   if(guestAction||campaignAction){
+    const bearer=req.headers.authorization;
+    if(typeof bearer!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(bearer))return reply(401,{error:'Sign in required'});
+    headers.Authorization=bearer;
+    const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+    let rpc,params={};
+    if(guestAction){
+     rpc='pandora_connect_guest_preferences';
+     if(b.action==='guest_save'){
+      if(!uuid(b.tenant)||typeof b.analytics!=='boolean'||typeof b.portal!=='boolean')return reply(400,{error:'Explicit consent choices required'});
+      params={p_tenant:b.tenant,p_analytics:b.analytics,p_portal:b.portal};
+     }
+    }else{
+     rpc='pandora_connect_campaigns';
+     if(!uuid(b.tenant))return reply(400,{error:'Business selection required'});
+     params={p_tenant:b.tenant,p_action:b.action.slice(9)};
+     if(b.action!=='campaign_list'){
+      if(!uuid(b.id))return reply(400,{error:'Draft ID required'});
+      params.p_id=b.id;
+     }
+     if(b.action==='campaign_create'){
+      if(typeof b.title!=='string'||!b.title.trim()||b.title.trim().length>100||!['welcome','loyalty','winback'].includes(b.objective)||!['email','sms','ads','portal'].includes(b.channel))return reply(400,{error:'Invalid campaign draft'});
+      Object.assign(params,{p_title:b.title.trim(),p_objective:b.objective,p_channel:b.channel});
+     }
+    }
+    const r=await request(url+'/rest/v1/rpc/'+rpc,{method:'POST',headers,body:JSON.stringify(params),signal:AbortSignal.timeout(12000)});
+    if(!r.ok)return reply(r.status===401?401:r.status===403?403:r.status===400?400:503,{error:r.status===401?'Session expired':r.status===403?'Invitation or workspace permission required':r.status===400?'Request rejected':'Service unavailable'});
+    const data=await r.json();if(!Array.isArray(data))return reply(502,{error:'Unexpected response'});
+    return reply(200,guestAction?{options:data}:{drafts:data});
+   }
    if(b.action==='overview'||b.action==='logout'){
     const bearer=req.headers.authorization;if(typeof bearer!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(bearer))return reply(401,{error:'Sign in required'});
     headers.Authorization=bearer;
