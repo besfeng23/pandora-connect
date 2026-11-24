@@ -64,6 +64,16 @@ export function createHandler({env=process.env,request=fetch}={}){
     if(!r.ok)return reply(r.status===401?401:r.status===403?403:503,{error:'Guest erasure unavailable'});
     const j=await r.json();if(j.erased!==true)return reply(502,{error:'Unexpected response'});return reply(200,{erased:true});
    }
+   if(b.action==='audience_preview'){
+    const bearer=req.headers.authorization;
+    if(typeof bearer!=='string'||!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(bearer))return reply(401,{error:'Sign in required'});
+    const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+    if(!uuid(b.tenant)||!uuid(b.id))return reply(400,{error:'Valid draft required'});
+    const r=await request(url+'/rest/v1/rpc/pandora_connect_audience_preview',{method:'POST',headers:{...headers,Authorization:bearer},body:JSON.stringify({p_tenant:b.tenant,p_campaign:b.id}),signal:AbortSignal.timeout(12000)});
+    if(!r.ok)return reply(r.status===401?401:r.status===403?403:503,{error:'Audience preview unavailable'});
+    const j=await r.json();if(!['blocked','preview_only'].includes(j.status))return reply(502,{error:'Unexpected response'});
+    return reply(200,{status:j.status,eligibleCount:j.status==='preview_only'?j.eligibleCount:null,reason:j.reason});
+   }
    const guestAction=['guest_options','guest_save'].includes(b.action);
    const campaignAction=['campaign_list','campaign_create','campaign_archive'].includes(b.action);
    if(guestAction||campaignAction){
